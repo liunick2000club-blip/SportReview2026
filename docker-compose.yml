@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  sport-review:
+    build: .
+    container_name: sport-review-app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:./dev.db
+    volumes:
+      # 持久化数据库文件，确保记录不丢失
+      - ./dev.db:/app/dev.db
+      - ./.env:/app/.env

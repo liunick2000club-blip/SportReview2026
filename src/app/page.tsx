@@ -1,0 +1,252 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { 
+  Activity as ActivityIcon, 
+  Bike, 
+  Calendar, 
+  Coins, 
+  Flag, 
+  LayoutDashboard, 
+  MapPin, 
+  Mountain, 
+  Plus, 
+  TrendingUp,
+  BarChart3
+} from "lucide-react";
+import { 
+  PieChart, 
+  Pie, 
+  Cell, 
+  ResponsiveContainer, 
+  Tooltip,
+  Legend,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid
+} from "recharts";
+import { format, startOfMonth, endOfMonth } from "date-fns";
+
+const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f43f5e"];
+
+export default function Dashboard() {
+  const router = useRouter();
+  const [summary, setSummary] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const sumRes = await fetch("/api/summary");
+        const sumData = await sumRes.json();
+        setSummary(sumData);
+      } catch (err) {
+        console.error("Failed to fetch data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
+  }, []);
+
+  const handleGymClick = (data: any) => {
+    if (data && data.name) {
+      router.push(`/activities?type=Climbing&gym=${encodeURIComponent(data.name)}`);
+    }
+  };
+
+  const handleRunningTrendClick = (data: any) => {
+    const monthLabel = data?.activeLabel;
+    if (monthLabel) {
+      const monthInt = parseInt(monthLabel.replace('月', ''));
+      const year = 2026;
+      const startDate = format(startOfMonth(new Date(year, monthInt - 1)), "yyyy-MM-dd");
+      const endDate = format(endOfMonth(new Date(year, monthInt - 1)), "yyyy-MM-dd");
+      router.push(`/activities?type=Running&startDate=${startDate}&endDate=${endDate}`);
+    }
+  };
+
+  const handleCyclingTrendClick = (data: any) => {
+    const monthLabel = data?.activeLabel;
+    if (monthLabel) {
+      const monthInt = parseInt(monthLabel.replace('月', ''));
+      const year = 2026;
+      const startDate = format(startOfMonth(new Date(year, monthInt - 1)), "yyyy-MM-dd");
+      const endDate = format(endOfMonth(new Date(year, monthInt - 1)), "yyyy-MM-dd");
+      router.push(`/activities?type=Cycling&startDate=${startDate}&endDate=${endDate}`);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // 格式化趋势数据，补全 1-12 月
+  const runningTrendData = Array.from({length: 12}, (_, i) => {
+    const m = (i + 1).toString().padStart(2, '0');
+    const existing = summary?.distances?.runningMonthly?.find((d: any) => d.month === m);
+    return {
+      month: m,
+      displayMonth: `${i + 1}月`,
+      distance: existing ? parseFloat(existing.totalDistance.toFixed(1)) : 0
+    };
+  });
+
+  const cyclingTrendData = Array.from({length: 12}, (_, i) => {
+    const m = (i + 1).toString().padStart(2, '0');
+    const existing = summary?.distances?.cyclingMonthly?.find((d: any) => d.month === m);
+    return {
+      month: m,
+      displayMonth: `${i + 1}月`,
+      distance: existing ? parseFloat(existing.totalDistance.toFixed(1)) : 0
+    };
+  });
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16 items-center">
+            <Link href="/" className="flex items-center space-x-2">
+              <div className="bg-blue-600 p-2 rounded-lg text-white">
+                <LayoutDashboard size={20} />
+              </div>
+              <h1 className="text-xl font-bold text-gray-900 tracking-tight">SportReview 2026</h1>
+            </Link>
+            <Link href="/new" className="flex items-center space-x-1 bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 transition shadow-md font-medium text-sm">
+              <Plus size={18} />
+              <span>记录运动</span>
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Link href="/activities?type=Climbing" className="block">
+            <StatCard title="总攀岩" value={summary?.summary.totalActivities - summary?.summary.otherCount} icon={<Mountain size={20} className="text-orange-600" />} unit="次" bgColor="bg-orange-50" />
+          </Link>
+          <Link href="/activities?type=Running" className="block">
+            <StatCard title="累计跑步" value={summary?.distances.running.toFixed(1)} icon={<Flag size={20} className="text-blue-600" />} unit="km" bgColor="bg-blue-50" />
+          </Link>
+          <Link href="/activities?type=Cycling" className="block">
+            <StatCard title="累计骑行" value={summary?.distances.cycling.toFixed(1)} icon={<Bike size={20} className="text-green-600" />} unit="km" bgColor="bg-green-50" />
+          </Link>
+          <div className="block">
+            <StatCard title="运动总花费" value={summary?.summary.totalSportsCost.toFixed(0)} icon={<Coins size={20} className="text-yellow-600" />} unit="元" bgColor="bg-yellow-50" />
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-8">
+          <div className="flex items-center justify-between mb-8 border-b border-gray-50 pb-4">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="text-blue-600" size={22} />
+              <h2 className="text-xl font-black text-gray-800 tracking-tight">年度数据概览</h2>
+            </div>
+            <Link href="/activities" className="text-xs font-bold text-gray-400 hover:text-blue-600 uppercase tracking-widest">查看明细</Link>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+            {/* 1. 攀岩馆分布 */}
+            <div className="space-y-4">
+              <h3 className="text-center text-xs font-bold text-gray-400 uppercase tracking-widest">攀岩馆分布</h3>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={summary?.climbing}
+                      dataKey="count"
+                      nameKey="name"
+                      cx="50%" cy="50%"
+                      outerRadius={80}
+                      innerRadius={50}
+                      paddingAngle={5}
+                      onClick={handleGymClick}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      {summary?.climbing.map((entry: any, index: number) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{fontSize: '10px'}} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* 2. 跑步里程 */}
+            <div className="space-y-4">
+              <h3 className="text-center text-xs font-bold text-gray-400 uppercase tracking-widest">月跑步里程 (km)</h3>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={runningTrendData} onClick={handleRunningTrendClick} style={{ cursor: 'pointer' }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
+                    <XAxis dataKey="displayMonth" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
+                    <Tooltip contentStyle={{borderRadius: '12px', border: 'none'}} />
+                    <Line type="monotone" dataKey="distance" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* 3. 骑行里程 */}
+            <div className="space-y-4">
+              <h3 className="text-center text-xs font-bold text-gray-400 uppercase tracking-widest">月骑行里程 (km)</h3>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={cyclingTrendData} onClick={handleCyclingTrendClick} style={{ cursor: 'pointer' }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
+                    <XAxis dataKey="displayMonth" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
+                    <Tooltip contentStyle={{borderRadius: '12px', border: 'none'}} />
+                    <Line type="monotone" dataKey="distance" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer className="mt-20 border-t border-gray-100 py-12">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <div className="inline-flex items-center space-x-2 text-gray-300">
+            <ActivityIcon size={16} />
+            <span className="text-xs font-black uppercase tracking-[0.2em]">SportReview · 2026 Archive</span>
+          </div>
+          <div className="mt-6 flex justify-center space-x-8">
+             <Link href="/api/cron/reminder" target="_blank" className="text-[10px] font-bold text-gray-400 hover:text-blue-600 transition-colors uppercase tracking-widest">触发测试推送</Link>
+             <Link href="/activities" className="text-[10px] font-bold text-gray-400 hover:text-blue-600 transition-colors uppercase tracking-widest">数据管理</Link>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function StatCard({ title, value, unit, icon, bgColor }: any) {
+  return (
+    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-all hover:-translate-y-1">
+      <div className={`${bgColor} w-10 h-10 flex items-center justify-center rounded-2xl mb-4`}>
+        {icon}
+      </div>
+      <div>
+        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">{title}</h3>
+        <div className="flex items-baseline space-x-1 mt-1">
+          <span className="text-3xl font-black text-gray-900">{value || 0}</span>
+          <span className="text-xs font-bold text-gray-400 uppercase">{unit}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
