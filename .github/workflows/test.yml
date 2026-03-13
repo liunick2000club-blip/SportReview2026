@@ -1,0 +1,36 @@
+name: Node.js CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20' # 建议与你本地开发版本一致
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Initialize Prisma and SQLite
+      run: |
+        npx prisma generate
+        # 在测试环境中推送数据库结构
+        npx prisma db push --accept-data-loss 
+
+    - name: Build project
+      run: npm run build
+      env:
+        # Actions 运行 build 时需要这些变量，可以填入占位符
+        DATABASE_URL: "file:./dev.db"
+        NEXT_PUBLIC_BASE_URL: "http://localhost:3000"
