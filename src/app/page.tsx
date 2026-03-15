@@ -14,7 +14,10 @@ import {
   Mountain, 
   Plus, 
   TrendingUp,
-  BarChart3
+  BarChart3,
+  X,
+  ChevronRight,
+  Info
 } from "lucide-react";
 import { 
   PieChart, 
@@ -23,8 +26,8 @@ import {
   ResponsiveContainer, 
   Tooltip,
   Legend,
-  LineChart,
-  Line,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid
@@ -37,6 +40,7 @@ export default function Dashboard() {
   const router = useRouter();
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showCostModal, setShowCostModal] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -110,8 +114,37 @@ export default function Dashboard() {
     };
   });
 
+  // 消费构成归并逻辑
+  const groupedClimbingCostsMap: Record<string, { name: string; totalCost: number }> = {};
+  const wanpanKey = "顽攀 (滨江/文体)";
+  const amortizedCost = summary?.summary?.amortizedCost || 0;
+
+  // 1. 初始化顽攀项并放入年卡摊销额
+  groupedClimbingCostsMap[wanpanKey] = { name: wanpanKey, totalCost: amortizedCost };
+
+  // 2. 归并原始场馆数据
+  (summary?.climbing || []).forEach((gym: any) => {
+    let displayName = gym.name;
+    if (displayName.includes("滨江") || displayName.includes("文体")) {
+      displayName = wanpanKey;
+    }
+    
+    if (!groupedClimbingCostsMap[displayName]) {
+      groupedClimbingCostsMap[displayName] = { name: displayName, totalCost: 0 };
+    }
+    groupedClimbingCostsMap[displayName].totalCost += gym.totalCost;
+  });
+
+  const totalSportsCost = summary?.summary?.totalSportsCost || 0;
+
+  const sortedClimbingCosts = Object.values(groupedClimbingCostsMap)
+    .filter(g => g.totalCost > 0)
+    .sort((a, b) => b.totalCost - a.totalCost);
+
+  const totalExtraCost = summary?.summary?.extraCost || 0;
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-gray-50 pb-20 relative">
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
@@ -132,16 +165,23 @@ export default function Dashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Link href="/activities?type=Climbing" className="block">
-            <StatCard title="总攀岩" value={summary?.summary.totalActivities - summary?.summary.otherCount} icon={<Mountain size={20} className="text-orange-600" />} unit="次" bgColor="bg-orange-50" />
+            <StatCard title="总攀岩" value={(summary?.summary?.totalActivities || 0) - (summary?.summary?.otherCount || 0)} icon={<Mountain size={20} className="text-orange-600" />} unit="次" bgColor="bg-orange-50" />
           </Link>
           <Link href="/activities?type=Running" className="block">
-            <StatCard title="累计跑步" value={summary?.distances.running.toFixed(1)} icon={<Flag size={20} className="text-blue-600" />} unit="km" bgColor="bg-blue-50" />
+            <StatCard title="累计跑步" value={summary?.distances?.running?.toFixed(1) || "0.0"} icon={<Flag size={20} className="text-blue-600" />} unit="km" bgColor="bg-blue-50" />
           </Link>
           <Link href="/activities?type=Cycling" className="block">
-            <StatCard title="累计骑行" value={summary?.distances.cycling.toFixed(1)} icon={<Bike size={20} className="text-green-600" />} unit="km" bgColor="bg-green-50" />
+            <StatCard title="累计骑行" value={summary?.distances?.cycling?.toFixed(1) || "0.0"} icon={<Bike size={20} className="text-green-600" />} unit="km" bgColor="bg-green-50" />
           </Link>
-          <div className="block">
-            <StatCard title="运动总花费" value={summary?.summary.totalSportsCost.toFixed(0)} icon={<Coins size={20} className="text-yellow-600" />} unit="元" bgColor="bg-yellow-50" />
+          <div className="block" onClick={() => setShowCostModal(true)}>
+            <StatCard 
+              title="运动总花费" 
+              value={summary?.summary?.totalSportsCost?.toFixed(0) || "0"} 
+              icon={<Coins size={20} className="text-yellow-600" />} 
+              unit="元" 
+              bgColor="bg-yellow-50"
+              clickable
+            />
           </div>
         </div>
 
@@ -172,7 +212,7 @@ export default function Dashboard() {
                       onClick={handleGymClick}
                       style={{ cursor: 'pointer' }}
                     >
-                      {summary?.climbing.map((entry: any, index: number) => (
+                      {summary?.climbing?.map((entry: any, index: number) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                       ))}
                     </Pie>
@@ -188,13 +228,16 @@ export default function Dashboard() {
               <h3 className="text-center text-xs font-bold text-gray-400 uppercase tracking-widest">月跑步里程 (km)</h3>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={runningTrendData} onClick={handleRunningTrendClick} style={{ cursor: 'pointer' }}>
+                  <BarChart data={runningTrendData} onClick={handleRunningTrendClick} style={{ cursor: 'pointer' }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
                     <XAxis dataKey="displayMonth" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
                     <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
-                    <Tooltip contentStyle={{borderRadius: '12px', border: 'none'}} />
-                    <Line type="monotone" dataKey="distance" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }} />
-                  </LineChart>
+                    <Tooltip 
+                      cursor={{fill: '#f1f5f9'}}
+                      contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} 
+                    />
+                    <Bar dataKey="distance" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={20} />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
@@ -204,19 +247,95 @@ export default function Dashboard() {
               <h3 className="text-center text-xs font-bold text-gray-400 uppercase tracking-widest">月骑行里程 (km)</h3>
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={cyclingTrendData} onClick={handleCyclingTrendClick} style={{ cursor: 'pointer' }}>
+                  <BarChart data={cyclingTrendData} onClick={handleCyclingTrendClick} style={{ cursor: 'pointer' }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f8fafc" />
                     <XAxis dataKey="displayMonth" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
                     <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#94a3b8'}} />
-                    <Tooltip contentStyle={{borderRadius: '12px', border: 'none'}} />
-                    <Line type="monotone" dataKey="distance" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#10b981', stroke: '#fff', strokeWidth: 2 }} />
-                  </LineChart>
+                    <Tooltip 
+                      cursor={{fill: '#f1f5f9'}}
+                      contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} 
+                    />
+                    <Bar dataKey="distance" fill="#10b981" radius={[4, 4, 0, 0]} barSize={20} />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
           </div>
         </div>
       </main>
+
+      {/* 消费明细 Modal */}
+      {showCostModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="p-8 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+              <div>
+                <h2 className="text-2xl font-black text-gray-900 tracking-tight">消费明细</h2>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-1">Cost Breakdown · 2026</p>
+              </div>
+              <button 
+                onClick={() => setShowCostModal(false)}
+                className="p-3 bg-white shadow-sm border border-gray-100 rounded-2xl hover:bg-gray-50 transition-colors text-gray-400 hover:text-gray-900"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-8 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              {/* 总览部分 */}
+              <div className="grid grid-cols-2 gap-4 mb-8">
+                <div className="bg-blue-50/50 p-6 rounded-[2rem] border border-blue-100/50">
+                  <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-1">年卡摊销</span>
+                  <div className="flex items-baseline space-x-1">
+                    <span className="text-2xl font-black text-blue-600">¥{Math.round(amortizedCost)}</span>
+                  </div>
+                </div>
+                <div className="bg-orange-50/50 p-6 rounded-[2rem] border border-orange-100/50">
+                  <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest block mb-1">额外单次</span>
+                  <div className="flex items-baseline space-x-1">
+                    <span className="text-2xl font-black text-orange-600">¥{Math.round(totalExtraCost)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 列表部分 */}
+              <div className="space-y-6">
+                <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] px-2">支出构成</h3>
+                <div className="space-y-5">
+                  {sortedClimbingCosts.map((gym: any, index: number) => (
+                    <div key={gym.name} className="group">
+                      <div className="flex justify-between items-end mb-2 px-2">
+                        <div className="flex items-center space-x-2">
+                          <span className="w-5 h-5 flex items-center justify-center rounded-lg bg-gray-100 text-[10px] font-black text-gray-400 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                            {index + 1}
+                          </span>
+                          <span className="text-sm font-bold text-gray-700">{gym.name}</span>
+                        </div>
+                        <span className="text-sm font-black text-gray-900">¥{Math.round(gym.totalCost)}</span>
+                      </div>
+                      <div className="relative h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className="absolute left-0 top-0 h-full bg-blue-600 transition-all duration-1000 ease-out rounded-full"
+                          style={{ width: `${(gym.totalCost / totalSportsCost) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-8 bg-gray-50/50 border-t border-gray-100">
+              <div className="flex items-start space-x-3 text-gray-400">
+                <Info size={16} className="mt-0.5 flex-shrink-0" />
+                <p className="text-[10px] font-bold leading-relaxed uppercase tracking-wider">
+                  年卡支出已归并入“顽攀”项中计算。年费 3288 元/年，按已过天数摊销。单次消费包含所有非年卡场馆及活动支出。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="mt-20 border-t border-gray-100 py-12">
         <div className="max-w-7xl mx-auto px-4 text-center">
@@ -234,14 +353,17 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ title, value, unit, icon, bgColor }: any) {
+function StatCard({ title, value, unit, icon, bgColor, clickable }: any) {
   return (
-    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 hover:shadow-md transition-all hover:-translate-y-1">
+    <div className={`bg-white p-6 rounded-3xl shadow-sm border border-gray-100 transition-all hover:-translate-y-1 ${clickable ? 'cursor-pointer hover:shadow-lg hover:border-yellow-200' : 'hover:shadow-md'}`}>
       <div className={`${bgColor} w-10 h-10 flex items-center justify-center rounded-2xl mb-4`}>
         {icon}
       </div>
       <div>
-        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">{title}</h3>
+        <div className="flex items-center space-x-1">
+          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">{title}</h3>
+          {clickable && <ChevronRight size={12} className="text-gray-300" />}
+        </div>
         <div className="flex items-baseline space-x-1 mt-1">
           <span className="text-3xl font-black text-gray-900">{value || 0}</span>
           <span className="text-xs font-bold text-gray-400 uppercase">{unit}</span>
