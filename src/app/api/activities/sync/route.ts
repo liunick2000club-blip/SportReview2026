@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchRecentStravaActivities, syncStravaActivity } from "@/lib/strava";
-import { sendDingTalkMessage } from "@/lib/dingtalk";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 // 递归地将 BigInt 转换为字符串，以解决 JSON 序列化问题
 function serializeBigInt(data: any): any {
@@ -17,18 +18,22 @@ function serializeBigInt(data: any): any {
 
 export async function POST() {
   try {
-    const stravaActivities = await fetchRecentStravaActivities();
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = (session.user as any).id;
+
+    const stravaActivities = await fetchRecentStravaActivities(userId);
     
     let addedCount = 0;
     let skippedCount = 0;
     let updatedCount = 0;
 
     for (const act of stravaActivities) {
-      const result = await syncStravaActivity(act);
+      const result = await syncStravaActivity(act, userId);
       if (result.skipped) {
         skippedCount++;
-      } else if (result.updated) {
-        updatedCount++;
       } else {
         addedCount++;
       }
@@ -47,7 +52,7 @@ export async function POST() {
     console.error("Sync API Error:", error);
     return NextResponse.json({ 
       success: false, 
-      message: error.message || "Unknown error during sync" 
+      message: error.message || "Unknown error during sync. Please check your Strava settings." 
     }, { status: 500 });
   }
 }

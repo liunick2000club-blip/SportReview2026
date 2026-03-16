@@ -16,7 +16,9 @@ export default function NewActivity() {
 function NewActivityContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialDate = searchParams.get("date") || new Date().toISOString().split("T")[0];
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const initialDate = searchParams.get("date") || todayStr;
 
   const [loading, setLoading] = useState(false);
   const [topGyms, setTopGyms] = useState<string[]>([]);

@@ -1,16 +1,26 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { startOfYear, differenceInDays, format, addDays } from "date-fns";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const userId = (session.user as any).id;
+
     const todayEnd = addDays(new Date(), 2); // 截止到后天，确保包含所有时区偏差的今日记录
     const todayEndStr = todayEnd.toISOString();
     const yearStart = startOfYear(new Date("2026-01-01"));
     
-    // 0. 抓取 2026 年的所有数据（在内存中过滤以绕过 Prisma/SQLite 日期比较 Bug）
+    // 0. 抓取当前用户 2026 年的所有数据（在内存中过滤以绕过 Prisma/SQLite 日期比较 Bug）
     const allActivities = await prisma.activity.findMany({
       where: {
+        userId: userId,
         date: {
           gte: new Date('2026-01-01'),
         }

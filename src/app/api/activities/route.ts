@@ -2,9 +2,17 @@ import { prisma } from "@/lib/prisma";
 import { sendDingTalkMessage } from "@/lib/dingtalk";
 import { NextRequest, NextResponse } from "next/server";
 import { startOfDay, endOfDay, subDays, addDays } from "date-fns";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = (session.user as any).id;
+
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get("limit") || "100");
     const mode = searchParams.get("mode");
@@ -15,6 +23,7 @@ export async function GET(request: NextRequest) {
     // 抓取 2026 年的所有数据（内存过滤）
     const allActivities = await prisma.activity.findMany({
       where: {
+        userId: userId,
         date: {
           gte: new Date('2026-01-01'),
         }
@@ -44,6 +53,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const userId = (session.user as any).id;
+
     const body = await request.json();
     const { date, type, gymName, cost, distance, notes } = body;
 
@@ -62,6 +77,7 @@ export async function POST(request: NextRequest) {
 
     const activity = await prisma.activity.create({
       data: {
+        userId,
         date: parsedDate,
         type,
         gymName: gymName || null,

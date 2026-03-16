@@ -3,7 +3,7 @@ import path from "path";
 
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
 
-const dbPath = path.join(process.cwd(), "prisma/dev.db");
+const dbPath = path.join(process.cwd(), "prisma/prisma/dev.db");
 
 export const prisma =
   globalForPrisma.prisma ||

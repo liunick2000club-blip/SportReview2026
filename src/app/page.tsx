@@ -1,5 +1,6 @@
 "use client";
 
+import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -18,8 +19,10 @@ import {
   X,
   ChevronRight,
   Info,
-  RefreshCw
+  RefreshCw,
+  LogOut
 } from "lucide-react";
+// ... (rest of imports remain same)
 import { 
   PieChart, 
   Pie, 
@@ -38,6 +41,7 @@ import { format, startOfMonth, endOfMonth } from "date-fns";
 const COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f43f5e"];
 
 export default function Dashboard() {
+  const { data: session } = useSession();
   const router = useRouter();
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -48,6 +52,10 @@ export default function Dashboard() {
   async function fetchData() {
     try {
       const sumRes = await fetch("/api/summary");
+      if (sumRes.status === 401) {
+        router.push("/login");
+        return;
+      }
       const sumData = await sumRes.json();
       setSummary(sumData);
     } catch (err) {
@@ -62,6 +70,7 @@ export default function Dashboard() {
     fetchData();
   }, []);
 
+// ... (rest of functions remain same, skipping to render part for navbar)
   const handleSyncStrava = async () => {
     setSyncing(true);
     try {
@@ -177,6 +186,14 @@ export default function Dashboard() {
               <h1 className="text-xl font-bold text-gray-900 tracking-tight">SportReview 2026</h1>
             </Link>
             <div className="flex items-center space-x-3">
+              {session?.user && (
+                <div className="hidden sm:flex items-center mr-4 pr-4 border-r border-gray-200">
+                  <span className="text-sm font-medium text-gray-600 mr-3">{session.user.name || session.user.email}</span>
+                  <button onClick={() => signOut()} className="text-gray-400 hover:text-red-500 transition" title="退出登录">
+                    <LogOut size={18} />
+                  </button>
+                </div>
+              )}
               <button 
                 onClick={handleSyncStrava}
                 disabled={syncing}
@@ -378,6 +395,8 @@ export default function Dashboard() {
           <div className="mt-6 flex justify-center space-x-8">
              <Link href="/api/cron/reminder" target="_blank" className="text-[10px] font-bold text-gray-400 hover:text-blue-600 transition-colors uppercase tracking-widest">触发测试推送</Link>
              <Link href="/activities" className="text-[10px] font-bold text-gray-400 hover:text-blue-600 transition-colors uppercase tracking-widest">数据管理</Link>
+             <Link href="/import" className="text-[10px] font-bold text-gray-400 hover:text-blue-600 transition-colors uppercase tracking-widest">数据导入</Link>
+             <Link href="/settings" className="text-[10px] font-bold text-gray-400 hover:text-blue-600 transition-colors uppercase tracking-widest">个人设置</Link>
           </div>
         </div>
       </footer>

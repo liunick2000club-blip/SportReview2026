@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ArrowLeft, Search, Calendar, MapPin, Mountain, Bike, Flag, Activity as ActivityIcon, Edit2 } from "lucide-react";
+import { ArrowLeft, Search, Calendar, MapPin, Mountain, Bike, Flag, Activity as ActivityIcon, Edit2, FileDown } from "lucide-react";
 import { format, isAfter, startOfToday } from "date-fns";
 
 export default function ActivitiesList() {
@@ -78,6 +78,16 @@ function ActivitiesContent() {
             </div>
             
             <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+              {/* 导出按钮 */}
+              <a
+                href="/api/activities/export"
+                className="flex items-center space-x-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-xl hover:bg-blue-100 transition-all font-bold text-sm"
+                title="导出所有数据为 CSV"
+              >
+                <FileDown size={18} />
+                <span className="hidden sm:inline">导出 CSV</span>
+              </a>
+
               {/* 类型筛选 */}
               <select 
                 value={typeFilter}

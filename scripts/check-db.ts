@@ -1,4 +1,4 @@
-import { prisma } from "./src/lib/prisma";
+import { prisma } from "../src/lib/prisma";
 async function main() {
   const count = await prisma.activity.count();
   console.log("Count:", count);

@@ -1,25 +1,40 @@
 import { prisma } from "./prisma";
 
-const STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
-const STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET;
-const STRAVA_REFRESH_TOKEN = process.env.STRAVA_REFRESH_TOKEN;
+/**
+ * 获取用户的 Strava 配置
+ */
+async function getUserStravaConfig(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      stravaClientId: true,
+      stravaClientSecret: true,
+      stravaRefreshToken: true,
+    }
+  });
+
+  if (!user || !user.stravaClientId || !user.stravaClientSecret || !user.stravaRefreshToken) {
+    throw new Error("Missing Strava configuration for this user. Please configure it in Settings.");
+  }
+
+  return user;
+}
 
 /**
  * 使用 Refresh Token 获取最新的 Access Token
  */
-async function getAccessToken() {
-  if (!STRAVA_CLIENT_ID || !STRAVA_CLIENT_SECRET || !STRAVA_REFRESH_TOKEN) {
-    throw new Error("Missing Strava configuration in environment variables");
-  }
+async function getAccessToken(userId: string) {
+  const config = await getUserStravaConfig(userId);
+
   const response = await fetch("https://www.strava.com/oauth/token", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      client_id: STRAVA_CLIENT_ID,
-      client_secret: STRAVA_CLIENT_SECRET,
-      refresh_token: STRAVA_REFRESH_TOKEN,
+      client_id: config.stravaClientId,
+      client_secret: config.stravaClientSecret,
+      refresh_token: config.stravaRefreshToken,
       grant_type: "refresh_token",
     }),
   });
@@ -37,8 +52,8 @@ async function getAccessToken() {
 /**
  * 抓取 2026 年以来所有的 Strava 活动
  */
-export async function fetchRecentStravaActivities() {
-  const accessToken = await getAccessToken();
+export async function fetchRecentStravaActivities(userId: string) {
+  const accessToken = await getAccessToken(userId);
   
   const afterTimestamp = Math.floor(new Date("2026-01-01T00:00:00Z").getTime() / 1000);
   
@@ -77,7 +92,7 @@ function formatDuration(seconds: number) {
 /**
  * 将 Strava 活动映射并存入本地数据库
  */
-export async function syncStravaActivity(stravaActivity: any) {
+export async function syncStravaActivity(stravaActivity: any, userId: string) {
   const {
     id: stravaId,
     start_date_local,
@@ -109,9 +124,10 @@ export async function syncStravaActivity(stravaActivity: any) {
 
   const date = new Date(start_date_local);
 
-  // 查重：两分钟内相同类型的活动即视为重复
+  // 查重：两分钟内相同类型的活动即视为重复（限制在当前用户内）
   const existing = await prisma.activity.findFirst({
     where: {
+      userId,
       date: {
         gte: new Date(date.getTime() - 1000 * 60 * 2),
         lte: new Date(date.getTime() + 1000 * 60 * 2),
@@ -127,6 +143,7 @@ export async function syncStravaActivity(stravaActivity: any) {
   // 写入数据库
   const newActivity = await prisma.activity.create({
     data: {
+      userId,
       date,
       type: localType,
       distance: parseFloat((distance / 1000).toFixed(2)), // 转为 KM

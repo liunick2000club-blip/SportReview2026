@@ -46,9 +46,12 @@ export default function EditActivity({ params }: PageProps) {
         }
         const data = await res.json();
         
-        // 解析日期为 yyyy-mm-dd 格式以匹配 input type="date"
+        // 解析日期为 yyyy-mm-dd 格式以匹配 input type="date"，使用本地时间避免时区偏移
         const recordDate = new Date(data.date);
-        const dateStr = recordDate.toISOString().split("T")[0];
+        const year = recordDate.getFullYear();
+        const month = String(recordDate.getMonth() + 1).padStart(2, "0");
+        const day = String(recordDate.getDate()).padStart(2, "0");
+        const dateStr = `${year}-${month}-${day}`;
 
         setFormData({
           date: dateStr,
