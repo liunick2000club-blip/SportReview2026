@@ -17,7 +17,8 @@ import {
   BarChart3,
   X,
   ChevronRight,
-  Info
+  Info,
+  RefreshCw
 } from "lucide-react";
 import { 
   PieChart, 
@@ -40,22 +41,43 @@ export default function Dashboard() {
   const router = useRouter();
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [showCostModal, setShowCostModal] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  async function fetchData() {
+    try {
+      const sumRes = await fetch("/api/summary");
+      const sumData = await sumRes.json();
+      setSummary(sumData);
+    } catch (err) {
+      console.error("Failed to fetch data:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const sumRes = await fetch("/api/summary");
-        const sumData = await sumRes.json();
-        setSummary(sumData);
-      } catch (err) {
-        console.error("Failed to fetch data:", err);
-      } finally {
-        setLoading(false);
-      }
-    }
+    setMounted(true);
     fetchData();
   }, []);
+
+  const handleSyncStrava = async () => {
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/activities/sync", { method: "POST" });
+      const data = await res.json();
+      alert(data.message);
+      if (data.success) {
+        fetchData(); // 刷新数据
+      }
+    } catch (err) {
+      console.error("Sync failed:", err);
+      alert("同步失败，请检查网络或授权。");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   const handleGymClick = (data: any) => {
     if (data && data.name) {
@@ -85,7 +107,7 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) {
+  if (!mounted || loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -154,10 +176,20 @@ export default function Dashboard() {
               </div>
               <h1 className="text-xl font-bold text-gray-900 tracking-tight">SportReview 2026</h1>
             </Link>
-            <Link href="/new" className="flex items-center space-x-1 bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 transition shadow-md font-medium text-sm">
-              <Plus size={18} />
-              <span>记录运动</span>
-            </Link>
+            <div className="flex items-center space-x-3">
+              <button 
+                onClick={handleSyncStrava}
+                disabled={syncing}
+                className="flex items-center space-x-1 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-full hover:bg-gray-50 transition shadow-sm font-medium text-sm disabled:opacity-50"
+              >
+                <RefreshCw size={16} className={syncing ? "animate-spin" : ""} />
+                <span>{syncing ? "同步中..." : "同步 Strava"}</span>
+              </button>
+              <Link href="/new" className="flex items-center space-x-1 bg-blue-600 text-white px-4 py-2 rounded-full hover:bg-blue-700 transition shadow-md font-medium text-sm">
+                <Plus size={18} />
+                <span>记录运动</span>
+              </Link>
+            </div>
           </div>
         </div>
       </nav>

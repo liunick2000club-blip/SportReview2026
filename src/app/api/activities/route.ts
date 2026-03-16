@@ -1,33 +1,40 @@
 import { prisma } from "@/lib/prisma";
 import { NextRequest, NextResponse } from "next/server";
-import { startOfDay, endOfDay, subDays } from "date-fns";
+import { startOfDay, endOfDay, subDays, addDays } from "date-fns";
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get("limit") || "100");
-    const mode = searchParams.get("mode"); // 'week' for dashboard past week
+    const mode = searchParams.get("mode");
 
-    let whereClause: any = {
-      date: {
-        lte: endOfDay(new Date()), // 仅显示今天及以前
+    const todayEnd = addDays(new Date(), 2);
+    const todayEndStr = todayEnd.toISOString();
+
+    // 抓取 2026 年的所有数据（内存过滤）
+    const allActivities = await prisma.activity.findMany({
+      where: {
+        date: {
+          gte: new Date('2026-01-01'),
+        }
       },
-    };
-
-    if (mode === "week") {
-      whereClause.date = {
-        gte: startOfDay(subDays(new Date(), 7)),
-        lte: endOfDay(new Date()),
-      };
-    }
-
-    const activities = await prisma.activity.findMany({
-      where: whereClause,
       orderBy: { date: "desc" },
-      take: limit,
     });
 
-    return NextResponse.json(activities);
+    let filtered = allActivities.filter(a => {
+      const actDateStr = typeof a.date === 'string' ? a.date : a.date.toISOString();
+      return actDateStr <= todayEndStr;
+    });
+
+    if (mode === "week") {
+      const weekAgo = subDays(new Date(), 7).toISOString();
+      filtered = filtered.filter(a => {
+        const actDateStr = typeof a.date === 'string' ? a.date : a.date.toISOString();
+        return actDateStr >= weekAgo;
+      });
+    }
+
+    return NextResponse.json(filtered.slice(0, limit));
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: "Failed to fetch activities" }, { status: 500 });
@@ -39,13 +46,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { date, type, gymName, cost, distance, notes } = body;
 
-    // 确保日期正确解析
     const parsedDate = new Date(date + "T00:00:00Z");
 
-    // --- 价格逻辑实现 ---
     let finalCost = cost ? parseFloat(cost) : null;
-    const ANNUAL_CARD_PRICE = 3288;
-    const AMORTIZED_DAILY_COST = ANNUAL_CARD_PRICE / 365;
 
     if (type === "Climbing" && gymName) {
       const lowerGym = gymName.toLowerCase();
@@ -54,7 +57,6 @@ export async function POST(request: NextRequest) {
       } else if (lowerGym.includes("环岛")) {
         finalCost = 70 + (finalCost || 0);
       }
-      // 顽攀/滨江等年卡场馆，finalCost 保持为输入的 extra 即可，不累加摊销
     }
 
     const activity = await prisma.activity.create({

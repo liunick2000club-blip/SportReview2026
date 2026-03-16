@@ -1,157 +1,107 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { endOfDay, startOfYear, differenceInDays, format } from "date-fns";
+import { startOfYear, differenceInDays, format, addDays } from "date-fns";
 
 export async function GET() {
   try {
-    const todayEnd = endOfDay(new Date());
+    const todayEnd = addDays(new Date(), 2); // 截止到后天，确保包含所有时区偏差的今日记录
+    const todayEndStr = todayEnd.toISOString();
     const yearStart = startOfYear(new Date("2026-01-01"));
     
+    // 0. 抓取 2026 年的所有数据（在内存中过滤以绕过 Prisma/SQLite 日期比较 Bug）
+    const allActivities = await prisma.activity.findMany({
+      where: {
+        date: {
+          gte: new Date('2026-01-01'),
+        }
+      }
+    });
+
+    // 过滤出截止到今天（含时区宽限）的数据
+    const activities = allActivities.filter(a => {
+      const actDateStr = typeof a.date === 'string' ? a.date : a.date.toISOString();
+      return actDateStr <= todayEndStr;
+    });
+
     // 1. 计算年卡摊销费用
-    // 年费 3288, 每天摊销 3288 / 365
-    const daysPassed = differenceInDays(todayEnd, yearStart) + 1; // 包含今天
+    const daysPassed = differenceInDays(todayEnd, yearStart) + 1; 
     const annualCardDailyCost = 3288 / 365;
     const amortizedCost = daysPassed * annualCardDailyCost;
 
-    // 2. 汇总单次活动费用 (如 Cliffs, 报名费等)
-    const extraCostsResult = await prisma.activity.aggregate({
-      where: { 
-        cost: { gt: 0 },
-        date: { lte: todayEnd }
-      },
-      _sum: { cost: true }
-    });
-    const totalExtraCost = extraCostsResult._sum.cost || 0;
+    // 2. 汇总单次活动费用
+    const totalExtraCost = activities.reduce((sum, a) => sum + (a.cost || 0), 0);
 
     // 3. 统计攀岩馆次数
-    const climbingStats = await prisma.activity.groupBy({
-      by: ['gymName'],
-      where: { 
-        type: 'Climbing',
-        date: { lte: todayEnd }
-      },
-      _count: { id: true },
-      _sum: { cost: true },
+    const climbingActivities = activities.filter(a => a.type === 'Climbing');
+    const climbingGymMap: Record<string, { count: number, totalCost: number }> = {};
+    climbingActivities.forEach(a => {
+      const name = a.gymName || "未知";
+      if (!climbingGymMap[name]) climbingGymMap[name] = { count: 0, totalCost: 0 };
+      climbingGymMap[name].count++;
+      climbingGymMap[name].totalCost += (a.cost || 0);
     });
+    const climbingStats = Object.entries(climbingGymMap).map(([name, s]) => ({
+      name,
+      count: s.count,
+      totalCost: s.totalCost
+    }));
 
-    // 3.1 攀岩月度趋势 (使用 Prisma groupBy)
-    const climbingMonthlyRaw = await prisma.activity.findMany({
-      where: { 
-        type: 'Climbing',
-        date: {
-          gte: new Date('2026-01-01'),
-          lte: todayEnd
-        }
-      },
-      select: { date: true }
-    });
-
+    // 3.1 攀岩月度趋势
     const climbingMonthlyMap: Record<string, number> = {};
-    climbingMonthlyRaw.forEach(act => {
+    climbingActivities.forEach(act => {
       const month = format(new Date(act.date), "MM");
       climbingMonthlyMap[month] = (climbingMonthlyMap[month] || 0) + 1;
     });
     const climbingMonthly = Object.entries(climbingMonthlyMap).map(([month, count]) => ({ month, count }));
 
     // 4. 统计跑步和骑行距离
-    const runningDistance = await prisma.activity.aggregate({
-      where: { 
-        type: 'Running',
-        date: { lte: todayEnd }
-      },
-      _sum: { distance: true },
-    });
+    const runningActivities = activities.filter(a => a.type === 'Running');
+    const cyclingActivities = activities.filter(a => a.type === 'Cycling');
 
-    // 4.1 跑步月度趋势 (使用 findMany + JS 聚合)
-    const runningMonthlyRaw = await prisma.activity.findMany({
-      where: {
-        type: 'Running',
-        date: {
-          gte: new Date('2026-01-01'),
-          lte: todayEnd
-        }
-      },
-      select: { date: true, distance: true }
-    });
+    const totalRunningDistance = runningActivities.reduce((sum, a) => sum + (a.distance || 0), 0);
+    const totalCyclingDistance = cyclingActivities.reduce((sum, a) => sum + (a.distance || 0), 0);
 
+    // 4.1 跑步月度趋势
     const runningMonthlyMap: Record<string, number> = {};
-    runningMonthlyRaw.forEach(act => {
+    runningActivities.forEach(act => {
       const month = format(new Date(act.date), "MM");
       runningMonthlyMap[month] = (runningMonthlyMap[month] || 0) + (act.distance || 0);
     });
     const runningMonthly = Object.entries(runningMonthlyMap).map(([month, totalDistance]) => ({ month, totalDistance }));
 
-    // 4.2 骑行月度趋势 (使用 findMany + JS 聚合)
-    const cyclingMonthlyRaw = await prisma.activity.findMany({
-      where: {
-        type: 'Cycling',
-        date: {
-          gte: new Date('2026-01-01'),
-          lte: todayEnd
-        }
-      },
-      select: { date: true, distance: true }
-    });
-
+    // 4.2 骑行月度趋势
     const cyclingMonthlyMap: Record<string, number> = {};
-    cyclingMonthlyRaw.forEach(act => {
+    cyclingActivities.forEach(act => {
       const month = format(new Date(act.date), "MM");
       cyclingMonthlyMap[month] = (cyclingMonthlyMap[month] || 0) + (act.distance || 0);
     });
     const cyclingMonthly = Object.entries(cyclingMonthlyMap).map(([month, totalDistance]) => ({ month, totalDistance }));
 
-    const cyclingDistance = await prisma.activity.aggregate({
-      where: { 
-        type: 'Cycling',
-        date: { lte: todayEnd }
-      },
-      _sum: { distance: true },
-    });
-
     // 5. 汇总数据
-    const totalActivities = await prisma.activity.count({
-      where: { date: { lte: todayEnd } }
-    });
+    const totalActivitiesCount = activities.length;
+    const otherCount = activities.filter(a => a.type === 'Other').length;
 
-    const topClimbingGyms = await prisma.activity.groupBy({
-      by: ['gymName'],
-      where: { 
-        type: 'Climbing', 
-        date: { lte: todayEnd },
-        NOT: { gymName: null }
-      },
-      _count: { id: true },
-      orderBy: { _count: { id: 'desc' } },
-      take: 3
-    });
-
-    const otherCount = await prisma.activity.count({
-      where: { 
-        type: 'Other',
-        date: { lte: todayEnd }
-      },
-    });
+    const topClimbingGyms = climbingStats
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3)
+      .map(s => s.name);
 
     return NextResponse.json({
-      climbing: climbingStats.map(s => ({
-        name: s.gymName || "未知",
-        count: s._count.id,
-        totalCost: s._sum.cost || 0
-      })),
-      climbingMonthly: climbingMonthly || [], // 攀岩月度趋势数据
+      climbing: climbingStats,
+      climbingMonthly: climbingMonthly || [],
       distances: {
-        running: runningDistance._sum.distance || 0,
-        cycling: cyclingDistance._sum.distance || 0,
-        runningMonthly: runningMonthly || [], // 跑步月度趋势数据
-        cyclingMonthly: cyclingMonthly || [], // 骑行月度趋势数据
+        running: totalRunningDistance,
+        cycling: totalCyclingDistance,
+        runningMonthly: runningMonthly || [],
+        cyclingMonthly: cyclingMonthly || [],
       },
       summary: {
-        totalActivities,
+        totalActivities: totalActivitiesCount,
         otherCount,
-        totalSportsCost: amortizedCost + totalExtraCost, // 总运动花费
-        amortizedCost, // 摊销金额
-        extraCost: totalExtraCost, // 额外支出
-        topGyms: topClimbingGyms.map(g => g.gymName)
+        totalSportsCost: amortizedCost + totalExtraCost,
+        amortizedCost,
+        extraCost: totalExtraCost,
+        topGyms: topClimbingGyms
       }
     });
   } catch (error) {
