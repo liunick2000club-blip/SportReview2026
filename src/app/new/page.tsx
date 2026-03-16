@@ -30,6 +30,26 @@ function NewActivityContent() {
     notes: "",
   });
 
+  const templates: Record<string, string> = {
+    Climbing: "【场馆/线路】完成了哪些线（颜色/等级）？\n【体感状态】热身情况、手指/手皮感受、心态如何？\n【技术细节】难点动作执行情况（动态/静力/协调性）、有哪些失误？\n【下一步】需要针对性训练什么（耐力/指力/想象力/连线）？",
+    Running: "【路线/环境】今日路线、天气、路况如何？\n【体感呼吸】呼吸是否均匀、肌肉是否有酸痛？\n【心率配速】是否达到预期目标、后半程体力如何？\n【改进建议】下次需要注意的地方？",
+    Cycling: "【路线/环境】今日路线、天气、地形如何？\n【体感呼吸】心率控制、腿部力量反馈？\n【设备/补给】车辆状态、补给是否及时？",
+    Other: "【项目进度】今日核心训练项目、重量/组数？\n【力量反馈】是否有力、动作是否标准？\n【身体状况】是否有伤病隐患、疲劳程度？",
+  };
+
+  const applyTemplate = (type: string, force = false) => {
+    if (force || !formData.notes || formData.notes.trim() === "") {
+      setFormData(prev => ({ ...prev, notes: templates[type] || "" }));
+    }
+  };
+
+  // 初始加载时应用默认模板
+  useEffect(() => {
+    if (!formData.notes) {
+      applyTemplate(formData.type);
+    }
+  }, []);
+
   useEffect(() => {
     fetch("/api/summary").then(res => res.json()).then(data => {
       if (data.summary?.topGyms) {
@@ -37,6 +57,18 @@ function NewActivityContent() {
       }
     });
   }, []);
+
+  const handleTypeChange = (newType: string) => {
+    setFormData(prev => {
+      const updated = { ...prev, type: newType };
+      // 如果备注为空或者是其他类型的模板，则切换模板
+      const isOtherTemplate = Object.values(templates).some(t => t === prev.notes);
+      if (!prev.notes || isOtherTemplate) {
+        updated.notes = templates[newType] || "";
+      }
+      return updated;
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,7 +145,7 @@ function NewActivityContent() {
                   <button
                     key={type.id}
                     type="button"
-                    onClick={() => setFormData({ ...formData, type: type.id })}
+                    onClick={() => handleTypeChange(type.id)}
                     className={`flex items-center justify-center space-x-2 py-3 px-4 rounded-xl border-2 transition-all font-medium ${
                       formData.type === type.id
                         ? "border-blue-600 bg-blue-50 text-blue-600 shadow-sm"
@@ -205,9 +237,18 @@ function NewActivityContent() {
 
             {/* 心得备注 */}
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">训练心得 / 备注</label>
+              <div className="flex justify-between items-end mb-2">
+                <label className="block text-sm font-bold text-gray-700">训练心得 / 备注</label>
+                <button
+                  type="button"
+                  onClick={() => applyTemplate(formData.type, true)}
+                  className="text-xs font-bold text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg"
+                >
+                  重置模板
+                </button>
+              </div>
               <textarea
-                rows={4}
+                rows={6}
                 placeholder="记下今日的训练感受或进步之处..."
                 value={formData.notes}
                 onChange={(e) => setFormData({ ...formData, notes: e.target.value })}

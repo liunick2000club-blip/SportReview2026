@@ -1,4 +1,4 @@
-export async function sendDingTalkMessage(content: string) {
+export async function sendDingTalkMessage(title: string, text: string) {
   const webhookUrl = process.env.DINGTALK_WEBHOOK_URL;
   const keyword = process.env.DINGTALK_KEYWORD || "LiuNick";
 
@@ -8,16 +8,19 @@ export async function sendDingTalkMessage(content: string) {
   }
 
   // 钉钉要求内容包含设置的“自定义关键词”
-  const fullMessage = `[${keyword}]\n${content}`;
+  // 在 Markdown 中，关键字必须出现在标题或文本中
+  const fullTitle = `[${keyword}] ${title}`;
+  const fullText = `### ${keyword} 通知\n---\n${text}`;
 
   try {
     const response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        msgtype: "text",
-        text: {
-          content: fullMessage,
+        msgtype: "markdown",
+        markdown: {
+          title: fullTitle,
+          text: fullText,
         },
       }),
     });

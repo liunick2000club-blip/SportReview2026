@@ -33,25 +33,28 @@ export async function GET() {
       }
 
       // 如果是晚上且已有记录，发送今日总结
-      messageContent = `[LiuNick] 🌙 今日 (${dateTitle}) 运动回顾：\n\n`;
+      const title = `🌙 今日 (${dateTitle}) 运动回顾`;
+      let text = `#### ${title}\n\n`;
       activities.forEach((act, index) => {
-        let line = `${index + 1}. 【${act.type}】`;
-        if (act.gymName) line += ` - ${act.gymName}`;
+        let line = `**${index + 1}. 【${act.type}】**`;
+        if (act.gymName) line += ` - _${act.gymName}_`;
         if (act.distance) line += ` (${act.distance}km)`;
         if (act.cost) line += ` [¥${act.cost}]`;
-        line += `\n   备注: ${act.notes || "无"}\n`;
-        messageContent += line;
+        line += `\n> 备注: ${act.notes || "无"}\n\n`;
+        text += line;
       });
-      messageContent += "\n今天也很棒，晚安！😴";
+      text += "今天也很棒，晚安！😴";
+      
+      await sendDingTalkMessage(title, text);
     } else {
       // 无论早晚，只要没填都发链接
       const newUrl = `${baseUrl}/new?date=${dateTitle}`;
       const timeContext = isNightSession ? "今日" : "昨日";
-      messageContent = `[LiuNick] 🔔 提醒：${timeContext} (${dateTitle}) 尚未记录活动。\n\n别让汗水被遗忘，趁现在记一笔吧！🏃‍♂️\n\n立即填写：${newUrl}`;
+      const title = `🔔 记录提醒：${timeContext}`;
+      const text = `#### ${timeContext} (${dateTitle}) 尚未记录活动\n\n别让汗水被遗忘，趁现在记一笔吧！🏃‍♂️\n\n[👉 立即填写](${newUrl})`;
+      
+      await sendDingTalkMessage(title, text);
     }
-
-    // 2. 发送钉钉通知
-    await sendDingTalkMessage(messageContent);
 
     return NextResponse.json({ 
       success: true, 

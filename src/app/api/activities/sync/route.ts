@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchRecentStravaActivities, syncStravaActivity } from "@/lib/strava";
+import { sendDingTalkMessage } from "@/lib/dingtalk";
 
 // 递归地将 BigInt 转换为字符串，以解决 JSON 序列化问题
 function serializeBigInt(data: any): any {
